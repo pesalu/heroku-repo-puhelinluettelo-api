@@ -1,8 +1,10 @@
+require('dotenv').config();
 const express = require('express')
 const app = express()
 const bodyParser = require('body-parser')
 const morgan = require('morgan')
 const cors = require('cors')
+const Person = require('./models/person')
 
 app.use(express.static('build'))
 app.use(cors());
@@ -20,7 +22,6 @@ app.use(morgan((tokens, req, res) => {
   ].join(' ');
 }));
 
-
 function isEmpty(obj) {
   for(var key in obj) {
       if(obj.hasOwnProperty(key))
@@ -28,39 +29,6 @@ function isEmpty(obj) {
   }
   return true;
 }
-
-let persons =  [
-    {
-      "name": "Arto Hellas",
-      "number": "040-123456",
-      "id": 1
-    },
-    {
-      "name": "Dan Abramov",
-      "number": "12-43-234345",
-      "id": 3
-    },
-    {
-      "name": "Mary Poppendieck",
-      "number": "39-23-6423122",
-      "id": 4
-    },
-    {
-      "name": "test3",
-      "number": "324234",
-      "id": 9   
-    },
-    {
-      "name": "test",
-      "number": "123211211",
-      "id": 11
-    },
-    {
-      "name": "test22",
-      "number": "1111",
-      "id": 12
-    }
-  ];
 
 const baseUrl = "/api";
 
@@ -70,17 +38,24 @@ app.get( baseUrl + '/info', (req, res) => {
 })
 
 app.get( baseUrl + '/persons', (req, res) => {
-  res.json(persons)
+  Person.find({}).then(persons => {
+    res.json(persons.map( person => person.toJSON()));
+  });
 })
 
 app.get( baseUrl + '/persons/:id', (req, res) => {
-  const id = Number(req.params.id);
-  let person = persons.find(person => person.id === id);
-  if (person) {
-    res.json(person);
-  } else {
-    res.status(404).end();
-  }
+  Person.findById(req.params.id).then(person => {
+    if (person) {
+      res.json(person.toJSON());
+    } else {
+      console.log('0000')
+      res.status(404).end();
+    }
+  })
+  .catch(error => {
+    console.log(error);
+    res.status(400).send({error: 'Malformatted id'});
+  });
 });
 
 app.post( baseUrl + '/persons', (req, res) => {
@@ -89,25 +64,18 @@ app.post( baseUrl + '/persons', (req, res) => {
     return res.status(400).json({
       error: 'Content missing!'
     });
-  } else if (persons.find(person => person.name === body.name)) {
-    return res.status(400).json({
-      error: 'Person with name ' + body.name + ' already exist!'
-    });
   }
 
-  const person = {
+  const person = new Person({
     name: body.name,
     number: body.number,
-    id: generateId()
-  }
+  });
 
-  persons = persons.concat( person );
-  res.json(person);
+  person.save().then(savedPerson => {
+    res.json(savedPerson.toJSON());
+  });
+
 });
-
-const generateId = () => {
-  return Math.floor( Math.random() * Math.floor(1000000) );
-}
 
 app.delete( baseUrl + '/persons/:id', (req, res) => {
   const id = Number(req.params.id);
