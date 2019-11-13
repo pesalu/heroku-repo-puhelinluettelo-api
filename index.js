@@ -5,6 +5,9 @@ const bodyParser = require('body-parser')
 const morgan = require('morgan')
 const cors = require('cors')
 const Person = require('./models/person')
+const mongoose = require('mongoose')
+
+mongoose.set('useFindAndModify', false)
 
 app.use(express.static('build'))
 app.use(cors());
@@ -33,8 +36,11 @@ function isEmpty(obj) {
 const baseUrl = "/api";
 
 app.get( baseUrl + '/info', (req, res) => {
-  res.send('<h1>Phone book</h1> <div>Phone book has info for ' + persons.length + ' persons</div>' +
+  Person.find({}).then(persons => {
+    const nPersons = persons.length;
+    res.send('<h1>Phone book</h1> <div>Phone book has info for ' + persons.length + ' persons</div>' +
            '<div>' + new Date() + '</div>' )
+  });
 })
 
 app.get( baseUrl + '/persons', (req, res) => {
@@ -43,19 +49,15 @@ app.get( baseUrl + '/persons', (req, res) => {
   });
 })
 
-app.get( baseUrl + '/persons/:id', (req, res) => {
+app.get( baseUrl + '/persons/:id', (req, res, next) => {
   Person.findById(req.params.id).then(person => {
     if (person) {
       res.json(person.toJSON());
     } else {
-      console.log('0000')
-      res.status(404).end();
+      next();
     }
   })
-  .catch(error => {
-    console.log(error);
-    res.status(400).send({error: 'Malformatted id'});
-  });
+  .catch(error => next(error));
 });
 
 app.post( baseUrl + '/persons', (req, res) => {
@@ -77,15 +79,60 @@ app.post( baseUrl + '/persons', (req, res) => {
 
 });
 
-app.delete( baseUrl + '/persons/:id', (req, res) => {
-  const id = Number(req.params.id);
-  if (!persons.find(person => person.id === id)) {
-    res.status(404).end();
-  } else {
-    persons = persons.filter(person => person.id !== id);
-    res.status(204).end();
+app.put( baseUrl + '/persons/:id', (req, res, next) => {
+  const body = req.body
+
+  const person = {
+    name: body.name,
+    number: body.number,
   }
+
+  Person.findByIdAndUpdate(req.params.id, person, { new: true })
+    .then(updatedPerson => {
+      res.json(updatedPerson.toJSON())
+    })
+    .catch(error => next(error))
+})
+
+app.delete( baseUrl + '/persons/:id', (req, res) => {
+  // const id = Number(req.params.id);
+  const useFindAndModify = false; 
+  Person.findByIdAndRemove(req.params.id)
+    .then(result => {
+      console.log('>>>>>>>>>>>> 1')
+      res.status(204).end();
+    })
+    .catch(error => {
+      console.log('>>>>>>>>>>>>')
+      next(error)
+    });
 });
+
+
+const unknownEndpoint = (request, response) => {
+  response.status(404).send({ error: 'unknown endpoint' })
+}
+
+// olemattomien osoitteiden käsittely
+app.use(unknownEndpoint)
+
+const errorHandler = (error, request, response, next) => {
+  console.error('+++++ 1', error.kind);
+  console.error('+++++ 2', error.name,  error.message);
+  if (error.name === 'TypeError') {
+    return response.status(500).send({ error: 'Person not found with given id' })
+  }
+
+  if (error.name === 'CastError' && error.kind == 'ObjectId') {
+    return response.status(400).send({ error: 'malformatted id' })
+  }
+
+  next(error)
+}
+
+app.use(errorHandler);
+
+
 
 // const PORT = 3001
 const PORT = process.env.PORT || 3001
