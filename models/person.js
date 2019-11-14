@@ -1,5 +1,6 @@
 require('dotenv').config();
 const mongoose = require('mongoose');
+var uniqueValidator = require('mongoose-unique-validator');
 
 const dbUrl = process.env.MONGODB_URI;
 
@@ -13,12 +14,22 @@ mongoose.connect(dbUrl, { useNewUrlParser: true })
     console.log('error connecting to mongoDb: ', error.message);
   })
 
-// DB-Schema definitions
+// DB-Schema definitions and constraints
 const personSchema = new mongoose.Schema({
-  name: String,
-  number: String
+  name: {
+    type: String,
+    minlength: 3,
+    unique: true,
+    required: true
+  },
+  number: {
+    type: String,
+    minlength: 8
+  }
 })
+personSchema.plugin(uniqueValidator);
 
+// Projections
 personSchema.set('toJSON', {
   transform: (document, returnedObject) => {
     console.log('DOCUMENT ', document)

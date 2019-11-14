@@ -14,6 +14,7 @@ app.use(cors());
 app.use(bodyParser.json());
 
 morgan.token('showPayload', (req, res) => { if (!isEmpty(req.body)) {return JSON.stringify(req.body)} });
+
 app.use(morgan((tokens, req, res) => {
   return [
     tokens.method(req, res),
@@ -60,7 +61,7 @@ app.get( baseUrl + '/persons/:id', (req, res, next) => {
   .catch(error => next(error));
 });
 
-app.post( baseUrl + '/persons', (req, res) => {
+app.post( baseUrl + '/persons', (req, res, next) => {
   const body = req.body;
   if (!body.name || !body.number) {
     return res.status(400).json({
@@ -75,7 +76,8 @@ app.post( baseUrl + '/persons', (req, res) => {
 
   person.save().then(savedPerson => {
     res.json(savedPerson.toJSON());
-  });
+  })
+  .catch(error => next(error));
 
 });
 
@@ -99,15 +101,12 @@ app.delete( baseUrl + '/persons/:id', (req, res) => {
   const useFindAndModify = false; 
   Person.findByIdAndRemove(req.params.id)
     .then(result => {
-      console.log('>>>>>>>>>>>> 1')
       res.status(204).end();
     })
     .catch(error => {
-      console.log('>>>>>>>>>>>>')
       next(error)
     });
 });
-
 
 const unknownEndpoint = (request, response) => {
   response.status(404).send({ error: 'unknown endpoint' })
@@ -116,23 +115,25 @@ const unknownEndpoint = (request, response) => {
 // olemattomien osoitteiden käsittely
 app.use(unknownEndpoint)
 
+// Palvelimen virheenkäsittely
 const errorHandler = (error, request, response, next) => {
-  console.error('+++++ 1', error.kind);
-  console.error('+++++ 2', error.name,  error.message);
+
   if (error.name === 'TypeError') {
-    return response.status(500).send({ error: 'Person not found with given id' })
+    return response.status(500).send({ error: error.message })
   }
 
   if (error.name === 'CastError' && error.kind == 'ObjectId') {
     return response.status(400).send({ error: 'malformatted id' })
   }
 
+  if (error.name === 'ValidationError' ) {
+    return response.status(400).send(error.message)
+  }
+
   next(error)
 }
 
 app.use(errorHandler);
-
-
 
 // const PORT = 3001
 const PORT = process.env.PORT || 3001
